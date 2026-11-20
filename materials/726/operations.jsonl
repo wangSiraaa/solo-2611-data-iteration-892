@@ -1,0 +1,4 @@
+{"operation":"insert","volume_id":"V1","before_page_id":"p3","page":{"page_id":"px","section_id":"body","label":"2a","active":true}}
+{"operation":"move","volume_id":"V1","page_id":"p4","before_page_id":"p2"}
+{"operation":"deactivate","volume_id":"V1","page_id":"p3"}
+{"operation":"move","volume_id":"V1","page_id":"p2","target_volume_id":"V2","before_page_id":"p1","expect":"reject_entire_batch"}

@@ -1,0 +1,46 @@
+{
+  "format": "volume-pages/1",
+  "revision": 1,
+  "volumes": [
+    {
+      "volume_id": "V1",
+      "pages": [
+        {
+          "page_id": "p1",
+          "section_id": "body",
+          "label": "1",
+          "active": true
+        },
+        {
+          "page_id": "p2",
+          "section_id": "body",
+          "label": "2",
+          "active": true
+        },
+        {
+          "page_id": "p3",
+          "section_id": "body",
+          "label": "3",
+          "active": true
+        },
+        {
+          "page_id": "p4",
+          "section_id": "appendix",
+          "label": "3",
+          "active": true
+        }
+      ]
+    },
+    {
+      "volume_id": "V2",
+      "pages": [
+        {
+          "page_id": "p1",
+          "section_id": "body",
+          "label": "1",
+          "active": true
+        }
+      ]
+    }
+  ]
+}

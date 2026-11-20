@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+work/**/*-wal
+work/**/*-shm
+exports/**/*.tmp

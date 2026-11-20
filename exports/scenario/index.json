@@ -1,0 +1,134 @@
+{
+  "exports_root": "exports/scenario",
+  "client": "materials/726/citation_client.py",
+  "steps": [
+    {
+      "step": "00_initial",
+      "title": "initial catalog and references",
+      "catalog_revision": 1,
+      "usable": 2,
+      "needs_attention": 0,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE usable V1/p2,V1/p3,V1/p4 -"
+      ]
+    },
+    {
+      "step": "01_interior_insert",
+      "title": "interior insert widens RANGE only",
+      "catalog_revision": 2,
+      "usable": 2,
+      "needs_attention": 0,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE usable V1/p2,V1/px,V1/p3,V1/p4 -"
+      ]
+    },
+    {
+      "step": "02_range_reversed",
+      "title": "same-volume move reverses RANGE; PINNED intact",
+      "catalog_revision": 3,
+      "usable": 1,
+      "needs_attention": 1,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE needs_attention V1/p2,V1/p4 range_endpoints_reversed"
+      ]
+    },
+    {
+      "step": "03_pinned_inactive",
+      "title": "fixed member inactive; not dropped",
+      "catalog_revision": 4,
+      "usable": 0,
+      "needs_attention": 2,
+      "client_output": [
+        "C_PIN needs_attention V1/p2,V1/p3(inactive) pinned_inactive_member",
+        "C_RANGE needs_attention V1/p2,V1/p4 range_endpoints_reversed"
+      ]
+    },
+    {
+      "step": "04_reopened",
+      "title": "reactivation + move back reopen both citations",
+      "catalog_revision": 6,
+      "usable": 2,
+      "needs_attention": 0,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE usable V1/p2,V1/px,V1/p4 -"
+      ]
+    },
+    {
+      "step": "05_endpoint_inactive",
+      "title": "RANGE endpoint inactive -> attention",
+      "catalog_revision": 7,
+      "usable": 1,
+      "needs_attention": 1,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE needs_attention V1/p2,V1/p4(inactive) range_endpoint_inactive"
+      ]
+    },
+    {
+      "step": "06_endpoint_reopened",
+      "title": "endpoint reactivation reopens RANGE",
+      "catalog_revision": 8,
+      "usable": 2,
+      "needs_attention": 0,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE usable V1/p2,V1/px,V1/p4 -"
+      ]
+    },
+    {
+      "step": "07_cross_volume_rejected",
+      "title": "cross-volume move rejected, no change",
+      "catalog_revision": 8,
+      "usable": 2,
+      "needs_attention": 0,
+      "client_output": [
+        "C_PIN usable V1/p2,V1/p3 -",
+        "C_RANGE usable V1/p2,V1/px,V1/p4 -"
+      ]
+    }
+  ],
+  "edge_cases": {
+    "same_section_same_label": {
+      "ok": false,
+      "error": "resolution_ambiguous",
+      "details": {
+        "volume_id": "E1",
+        "section_id": "body",
+        "label": "3",
+        "matching_page_ids": [
+          "e1",
+          "e2"
+        ]
+      }
+    },
+    "other_section_same_label": {
+      "ok": true,
+      "value": "e3"
+    },
+    "different_string_labels": {
+      "ok": true,
+      "value": [
+        "e4",
+        "e5"
+      ]
+    },
+    "leading_zero_not_found": {
+      "ok": false,
+      "error": "resolution_not_found",
+      "details": {
+        "volume_id": "E1",
+        "section_id": "body",
+        "label": "03"
+      }
+    },
+    "ambiguous_create_writes_nothing": {
+      "ok": false,
+      "error": "resolution_ambiguous",
+      "citations_after": 0
+    }
+  }
+}
