@@ -78,13 +78,16 @@ class Catalog:
     # ------------------------------------------------------------------
     @classmethod
     def open(cls, path: str) -> "Catalog":
-        return cls(db.connect(path))
+        cat = cls(db.connect(path))
+        # All schema statements are ``IF NOT EXISTS``, so opening an older
+        # database lazily adds any tables introduced since it was created
+        # (for example the rights/settlement tables) without touching data.
+        db.initialize_schema(cat.conn)
+        return cat
 
     @classmethod
     def create(cls, path: str) -> "Catalog":
-        cat = cls.open(path)
-        db.initialize_schema(cat.conn)
-        return cat
+        return cls.open(path)
 
     def close(self) -> None:
         self.conn.close()

@@ -29,7 +29,8 @@ python3 materials/726/citation_client.py \
 
 ```bash
 python3 scripts/demo_726.py     # 写 exports/scenario/，每步一个目录，互不覆盖
-python3 -m unittest tests.test_citation_system -v
+python3 scripts/demo_rights_726.py  # 权属版 + 合刊版税结算展示，写 exports/rights/
+python3 -m unittest discover -s tests -v
 python3 scripts/benchmark_726.py  # 20 卷 × 200 页 × 500 引用
 ```
 
@@ -101,6 +102,82 @@ C_RANGE usable V1/p2,V1/p3,V1/p4 -
 - 写出前用 `validate_products` 校验合同；两文件先写临时文件再 `os.replace`，
   单个文件不会半写。若需两文件成对切换，请以**整个导出目录**为单位发布。
 
+## 权属版与合刊版税结算（`citation_system/rights.py` / `settlement.py`）
+
+在既有目录与引用仓之上，为**页身份**增加权属修订，为**刊次**增加版税结算。
+全部使用本地合成合同数据，不联网。
+
+### 权属版（`rights.py`）
+
+- **权属版**是按名标识的一组声明；页份额与账户分配都**按生效日分版**。
+  查询某页在某个**出版日**的权利时，取 `effective_date <= 出版日` 的
+  **最新一版**；更晚的更正不会回填旧刊。旧刊重查因此拿到旧版。
+- 页份额与每条账户分配都是非负有理数（内部 `Fraction`，绝不经过 `float`），
+  每级必须恰好合为 `1`。声明可批量提交：**任一非法则整批回滚**。
+  同一 `(版, 页, 生效日)` 重复声明会以 `rights_version_exists` 拒绝，
+  除非显式 `replace`（批量更正用新的生效日或整版替换）。
+- **复合权益**：页的直接账户可继续把自身份额按版/日期分给多个收款人或
+  中间账户；各边按份额成比例，同一收款人从多条路径所得**合并**。
+  没有分配行的账户即最终收款人。返回的每页权益同时给出逐层依据
+  （页份额版、账户分配版、每条通道）与合并后的最终份额。
+- **待核**：若请求的出版日没有任何页版本（`declaration_not_effective`）、
+  某账户的分配只覆盖更晚的日期（`allocation_not_effective`）、存在
+  **环**（`allocation_cycle`），或某级不归一，则该页解析失败，
+  `try_resolve_page` 返回结构化 `problem`。
+
+CLI：`rights-edition` / `rights-declare`（读取 JSONL，单事务批量）/
+`rights-page`（查看一页最终权益与逐层依据）。
+
+声明 JSONL 示例：
+
+```json
+{"kind":"page_shares","edition_id":"E","volume_id":"V1","page_id":"p2",
+ "effective_date":"2020-01-01","shares":{"A":"1/2","B":"1/2"}}
+{"kind":"account_allocations","edition_id":"E","account_id":"A",
+ "effective_date":"2020-06-01","shares":{"B":"1"}}
+```
+
+### 合刊结算（`settlement.py`）
+
+- **计价组 / 栏目**：栏目属于恰好一个计价组，每组单页金额为整数分。
+- **同组同页只付一次，不同组同页各计一次**。刊内以
+  `(计价组, volume_id, page_id)` 去重后逐个计费。
+- 每个计价单元的分额 **乘以该页最终权属份额**，按收款人把整刊精确应得
+  合计，先**向下取整**，余额分按**小数余数从大到小**、**同余按收款人号升序**
+  逐分补足。
+- **待领余额与门槛**：每位收款人有由**批次（lot）**组成的待领余额，
+  每个 lot 标记产生它的刊次（或 `opening`）。`余额 + 本刊分摊 >= 门槛`
+  就汇出**全数**并消耗旧 lot，否则整笔留到下刊（新分摊作为新 lot）。
+- **原子关账**：一次 `settle` 在 `BEGIN IMMEDIATE` 中完成，且
+  1. 只要任一登记摘录当前不可解析（失效成员/端点、反转等）或任一页权属
+     待核，**整刊拒绝**（`settlement_blocked`），绝不只按可用部分结账；
+  2. 计算本刊整数分摊；
+  3. 结算并登记汇出，消耗旧余额；
+  4. 写入**封存凭据**（`royalty-voucher/1`），其规范化 JSON 的 SHA-256
+     可离线重算校验（`voucher --verify`）。
+  同一刊次重试返回同一凭据、**不再扣一次**旧余额；并发关账在写事务上串行，
+  只有第一次真正改动账本。后续刊次接续。
+- 凭据自带解释材料：登记（栏目/摘录/登记时目录修订）、计价单元、
+  每页权益与逐层依据、精确/取整/余数/补足、每人 prior lots（含来源刊次）、
+  实付与留存。因此历史凭证可独立解释每一分从哪几页、哪几期余额产生。
+
+CLI：`pricing-group` / `column` / `issue` / `register` / `settle` /
+`voucher` / `balance` / `payee-terms`。
+
+### 工作示例（任务给定）
+
+同卷 `p`、`q` 均印页码 3；`p` 对甲乙各半，`q` 全归乙。栏目一引固定 `p`，
+栏目二引含 `p,q` 的范围，起初同组，单页 3 分：
+
+- 同组：`p,q` 各计一次 = 6 分；甲乙精确 1.5 / 4.5，甲号靠前 → 实付 2 / 4。
+- 栏目二换到另一同价组：合计 9 分；甲乙应付 3 / 6。
+- 保持原合同，仅把甲账户份额全数分给乙：最终归属 0 / 6。
+- 用原权属、甲乙门槛均 5、期初零：首刊两人都暂存（甲 2、乙 4）；
+  下刊重印，甲累至 4 仍暂存，乙累至 8 应汇 8。
+
+`scripts/demo_rights_726.py` 逐项跑通以上场景，并额外演示多路径复合权益、
+范围中间插页、以及并发关账只付一次，凭据写入 `exports/rights/`。
+
 ## 依赖索引（`citation_system/dependency.py`，可选）
 
 - 目的：加速"某实际页被哪些引用覆盖"。
@@ -130,11 +207,13 @@ C_RANGE usable V1/p2,V1/p3,V1/p4 -
 ## 布局
 
 ```
-citation_system/   实现源码（catalog / repository / export / dependency / cli）
-tests/             52 个单元与集成测试（含随机不变量与目标规模）
+citation_system/   实现源码（catalog / repository / export / dependency / rights / settlement / cli）
+tests/             单元与集成测试（含随机不变量、目标规模、权属与结算）
 scripts/demo_726.py        端到端展示，逐步保留旧导出
+scripts/demo_rights_726.py 权属版与合刊版税结算展示
 scripts/benchmark_726.py   目标规模基准
 exports/scenario/  演示产生的各步骤导出（旧目录保留）
+exports/rights/    结算演示的封存凭据与索引
 exports/cli_run/   按 materials 原始输入走完整 CLI 的导出
 work/              运行的 SQLite 数据库
 ```

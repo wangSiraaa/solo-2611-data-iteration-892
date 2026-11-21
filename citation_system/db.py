@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -91,6 +91,120 @@ CREATE TABLE IF NOT EXISTS operation_log (
     expectation_met  INTEGER,
     recorded_at      TEXT NOT NULL
 );
+
+-- ------------------------------------------------------------------
+-- Rights editions (权属版) and their declarations.
+--
+-- A declaration version is the set of rows sharing
+-- (edition_id, ..., effective_date).  Its shares are non-negative
+-- rationals summing to exactly 1.  Lookups pick the newest version whose
+-- effective_date is <= the publication date, so a later correction never
+-- back-fills an older issue.
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS rights_editions (
+    edition_id  TEXT PRIMARY KEY,
+    description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS page_right_shares (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    edition_id     TEXT NOT NULL REFERENCES rights_editions(edition_id),
+    volume_id      TEXT NOT NULL,
+    page_id        TEXT NOT NULL,
+    effective_date TEXT NOT NULL,          -- ISO YYYY-MM-DD, inclusive
+    account_id     TEXT NOT NULL,
+    share_num      INTEGER NOT NULL CHECK (share_num >= 0),
+    share_den      INTEGER NOT NULL CHECK (share_den > 0),
+    UNIQUE (edition_id, volume_id, page_id, effective_date, account_id)
+);
+CREATE INDEX IF NOT EXISTS page_right_shares_lookup
+    ON page_right_shares (edition_id, volume_id, page_id, effective_date);
+
+CREATE TABLE IF NOT EXISTS account_allocations (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    edition_id     TEXT NOT NULL REFERENCES rights_editions(edition_id),
+    account_id     TEXT NOT NULL,
+    effective_date TEXT NOT NULL,          -- ISO YYYY-MM-DD, inclusive
+    to_account_id  TEXT NOT NULL,
+    share_num      INTEGER NOT NULL CHECK (share_num >= 0),
+    share_den      INTEGER NOT NULL CHECK (share_den > 0),
+    UNIQUE (edition_id, account_id, effective_date, to_account_id)
+);
+CREATE INDEX IF NOT EXISTS account_allocations_lookup
+    ON account_allocations (edition_id, account_id, effective_date);
+
+-- ------------------------------------------------------------------
+-- Pricing groups (栏目计价组) and columns (栏目).
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pricing_groups (
+    group_id        TEXT PRIMARY KEY,
+    per_page_cents  INTEGER NOT NULL CHECK (per_page_cents >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS columns_table (
+    column_id        TEXT PRIMARY KEY,
+    pricing_group_id TEXT NOT NULL REFERENCES pricing_groups(group_id)
+);
+
+-- ------------------------------------------------------------------
+-- Pending-balance ledger: each lot records which issue produced the cents.
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS pending_lots (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    payee_id  TEXT NOT NULL,
+    source    TEXT NOT NULL,              -- an issue_id or "opening"
+    cents     INTEGER NOT NULL CHECK (cents >= 0)
+);
+CREATE INDEX IF NOT EXISTS pending_lots_payee ON pending_lots (payee_id, id);
+
+CREATE TABLE IF NOT EXISTS payee_terms (
+    payee_id        TEXT PRIMARY KEY,
+    threshold_cents INTEGER NOT NULL CHECK (threshold_cents >= 0)
+);
+
+-- ------------------------------------------------------------------
+-- Sealed settlement vouchers.  One row per issue; re-closing returns it.
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS settlements (
+    issue_id          TEXT PRIMARY KEY,
+    publication_date  TEXT NOT NULL,
+    rights_edition_id TEXT NOT NULL,
+    catalog_revision  INTEGER NOT NULL,
+    voucher_sha256    TEXT NOT NULL,
+    voucher_json      TEXT NOT NULL,
+    created_at        TEXT NOT NULL
+);
+
+-- ------------------------------------------------------------------
+-- Issues (刊次) and the citations registered into columns.
+--
+-- A registration binds an existing citation (the excerpt) to a column and
+-- captures the catalog revision it was registered under.  The same citation
+-- may be registered in several columns, which is exactly the repeated-archive
+-- case the royalty rules price by (group, page).
+-- ------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS issues (
+    issue_id          TEXT PRIMARY KEY,
+    publication_date  TEXT NOT NULL,
+    rights_edition_id TEXT NOT NULL REFERENCES rights_editions(edition_id),
+    catalog_revision  INTEGER NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'open'  -- open | sealed
+        CHECK (status IN ('open', 'sealed')),
+    created_at        TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS issue_citations (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id         TEXT NOT NULL REFERENCES issues(issue_id) ON DELETE CASCADE,
+    column_id        TEXT NOT NULL REFERENCES columns_table(column_id),
+    citation_id      TEXT NOT NULL REFERENCES citations(citation_id),
+    position         INTEGER NOT NULL,
+    excerpt          TEXT NOT NULL,
+    catalog_revision INTEGER NOT NULL,
+    UNIQUE (issue_id, column_id, citation_id)
+);
+CREATE INDEX IF NOT EXISTS issue_citations_issue
+    ON issue_citations (issue_id, position);
 """
 
 
@@ -105,12 +219,17 @@ def connect(path: str | Path) -> sqlite3.Connection:
     # that immutable snapshot only.
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
+    # Concurrent sealing serializes on BEGIN IMMEDIATE; wait rather than fail.
+    conn.execute("PRAGMA busy_timeout = 10000")
     return conn
 
 
 def initialize_schema(conn: sqlite3.Connection) -> None:
+    # ``IF NOT EXISTS`` makes this safe repeatedly.  It also migrates an older
+    # database by adding tables that did not exist when it was created.
     conn.executescript(SCHEMA)
-    set_meta(conn, "schema_version", str(SCHEMA_VERSION))
+    if get_meta(conn, "schema_version") != str(SCHEMA_VERSION):
+        set_meta(conn, "schema_version", str(SCHEMA_VERSION))
 
 
 def get_meta(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
@@ -184,6 +303,16 @@ def clear_all(conn: sqlite3.Connection) -> None:
 
     with write_transaction(conn):
         for table in (
+            "issue_citations",
+            "issues",
+            "settlements",
+            "pending_lots",
+            "payee_terms",
+            "columns_table",
+            "pricing_groups",
+            "account_allocations",
+            "page_right_shares",
+            "rights_editions",
             "operation_log",
             "pinned_members",
             "range_endpoints",

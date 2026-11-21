@@ -27,6 +27,8 @@ from typing import Any
 from . import export
 from .catalog import Catalog
 from .repository import CitationRepository
+from .rights import RightsLedger
+from .settlement import SettlementLedger
 
 
 def _read_json(path: str | Path) -> Any:
@@ -239,6 +241,230 @@ def cmd_referrers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_rights_declare(args: argparse.Namespace) -> int:
+    """Apply dated rights declarations from JSONL atomically."""
+
+    catalog = _open_existing(args.db)
+    try:
+        ledger = RightsLedger(catalog)
+        declarations = _read_jsonl(args.declarations)
+        counts = ledger.apply_batch(declarations)
+    finally:
+        catalog.close()
+    print(json.dumps({"applied": counts}, ensure_ascii=False))
+    return 0
+
+
+def cmd_rights_edition(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = RightsLedger(catalog)
+        if args.list:
+            out: Any = {"editions": ledger.editions()}
+        else:
+            ledger.create_edition(args.edition_id, args.description)
+            out = {"created": args.edition_id}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_rights_page(args: argparse.Namespace) -> int:
+    """Show a page's final entitlement and layered basis at a publication date."""
+
+    catalog = _open_existing(args.db)
+    try:
+        ledger = RightsLedger(catalog)
+        ent = ledger.resolve_page_entitlement(
+            args.edition_id, args.volume_id, args.page_id, args.date
+        )
+        out = {
+            "edition_id": ent.edition_id,
+            "volume_id": ent.volume_id,
+            "page_id": ent.page_id,
+            "publication_date": ent.publication_date,
+            "shares": ent.shares_as_strings(),
+            "paths": list(ent.paths),
+            "basis": ent.basis,
+        }
+    except Exception as exc:  # noqa: BLE001 - structural errors are the output
+        out = {"error": _error_dict(exc)}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if "error" not in out else 2
+
+
+def cmd_pricing_group(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        if args.list:
+            out: Any = {"groups": ledger.groups(), "columns": ledger.columns()}
+        else:
+            ledger.create_pricing_group(args.group_id, args.per_page_cents)
+            out = {"created": args.group_id, "per_page_cents": args.per_page_cents}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_column(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        if args.list:
+            out: Any = {"columns": ledger.columns()}
+        elif args.reassign:
+            ledger.reassign_column(args.column_id, args.group_id)
+            out = {"reassigned": args.column_id, "group_id": args.group_id}
+        else:
+            ledger.create_column(args.column_id, args.group_id)
+            out = {"created": args.column_id, "group_id": args.group_id}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_issue(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        out: Any = ledger.create_issue(
+            args.issue_id, args.publication_date, args.edition_id
+        )
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_register(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        if args.registrations:
+            regs = _read_jsonl(args.registrations)
+        else:
+            regs = [
+                {
+                    "column_id": args.column_id,
+                    "citation_id": args.citation_id,
+                    "excerpt": args.excerpt,
+                }
+            ]
+        rows = ledger.register_many(args.issue_id, regs)
+    finally:
+        catalog.close()
+    print(json.dumps({"issue_id": args.issue_id, "registrations": rows},
+                     ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_settle(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        try:
+            voucher = ledger.settle(args.issue_id)
+        except Exception as exc:  # noqa: BLE001 - structured rejection
+            print(json.dumps({"error": _error_dict(exc)}, ensure_ascii=False, indent=2))
+            return 2
+    finally:
+        catalog.close()
+    if args.out:
+        Path(args.out).write_text(
+            json.dumps(voucher, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+    print(json.dumps(
+        {
+            "issue_id": voucher["issue_id"],
+            "total_cents": voucher["total_cents"],
+            "allotted": voucher["allocation"]["allotted"],
+            "payees": [
+                {
+                    "payee_id": p["payee_id"],
+                    "allotment": p["allotment"],
+                    "prior_balance": p["prior_balance"],
+                    "threshold": p["threshold"],
+                    "paid": p["paid"],
+                    "carried": p["carried"],
+                }
+                for p in voucher["payees"]
+            ],
+            "voucher_sha256": voucher["voucher_sha256"],
+        },
+        ensure_ascii=False,
+        indent=2,
+    ))
+    return 0
+
+
+def cmd_voucher(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        if args.verify:
+            out: Any = {
+                "issue_id": args.issue_id,
+                "verified": ledger.verify_voucher(args.issue_id),
+            }
+        else:
+            voucher = ledger.get_voucher(args.issue_id)
+            out = voucher if voucher is not None else {"error": _error_dict(
+                ValueError(f"no settlement for issue {args.issue_id!r}")
+            )}
+    except Exception as exc:  # noqa: BLE001
+        out = {"error": _error_dict(exc)}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if "error" not in out else 2
+
+
+def cmd_balance(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        out = ledger.pending_balance(args.payee_id)
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_payee_terms(args: argparse.Namespace) -> int:
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        ledger.set_threshold(args.payee_id, args.threshold_cents)
+        if args.opening_cents is not None:
+            ledger.set_opening_balance(args.payee_id, args.opening_cents)
+        out = ledger.pending_balance(args.payee_id)
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_inspect_issue(args: argparse.Namespace) -> int:
+    """Pre-flight: which registrations are ready, which need attention."""
+
+    catalog = _open_existing(args.db)
+    try:
+        ledger = SettlementLedger(catalog)
+        out: Any = ledger.inspect(args.issue_id)
+    except Exception as exc:  # noqa: BLE001
+        out = {"error": _error_dict(exc)}
+    finally:
+        catalog.close()
+    print(json.dumps(out, ensure_ascii=False, indent=2))
+    return 0 if "error" not in out else 2
+
+
 def _error_dict(exc: BaseException) -> dict[str, Any]:
     if hasattr(exc, "as_dict"):
         return exc.as_dict()  # type: ignore[no-any-return]
@@ -292,6 +518,87 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--volume", dest="volume_id", required=True)
     p.add_argument("--page", dest="page_id", required=True)
     p.set_defaults(func=cmd_referrers)
+
+    # ---- rights ------------------------------------------------------
+    p = sub.add_parser("rights-edition", help="create or list rights editions")
+    p.add_argument("--db", required=True)
+    p.add_argument("--edition", dest="edition_id")
+    p.add_argument("--description")
+    p.add_argument("--list", action="store_true")
+    p.set_defaults(func=cmd_rights_edition)
+
+    p = sub.add_parser("rights-declare", help="apply dated declarations JSONL")
+    p.add_argument("--db", required=True)
+    p.add_argument("--declarations", required=True)
+    p.set_defaults(func=cmd_rights_declare)
+
+    p = sub.add_parser("rights-page", help="final entitlement + basis for a page")
+    p.add_argument("--db", required=True)
+    p.add_argument("--edition", dest="edition_id", required=True)
+    p.add_argument("--volume", dest="volume_id", required=True)
+    p.add_argument("--page", dest="page_id", required=True)
+    p.add_argument("--date", required=True)
+    p.set_defaults(func=cmd_rights_page)
+
+    # ---- settlement --------------------------------------------------
+    p = sub.add_parser("pricing-group", help="create or list pricing groups")
+    p.add_argument("--db", required=True)
+    p.add_argument("--group", dest="group_id")
+    p.add_argument("--cents", dest="per_page_cents", type=int)
+    p.add_argument("--list", action="store_true")
+    p.set_defaults(func=cmd_pricing_group)
+
+    p = sub.add_parser("column", help="create/reassign/list columns")
+    p.add_argument("--db", required=True)
+    p.add_argument("--column", dest="column_id")
+    p.add_argument("--group", dest="group_id")
+    p.add_argument("--reassign", action="store_true")
+    p.add_argument("--list", action="store_true")
+    p.set_defaults(func=cmd_column)
+
+    p = sub.add_parser("issue", help="create a bound issue")
+    p.add_argument("--db", required=True)
+    p.add_argument("--issue", dest="issue_id", required=True)
+    p.add_argument("--date", dest="publication_date", required=True)
+    p.add_argument("--edition", dest="edition_id", required=True)
+    p.set_defaults(func=cmd_issue)
+
+    p = sub.add_parser("register", help="register excerpt(s) into issue columns")
+    p.add_argument("--db", required=True)
+    p.add_argument("--issue", dest="issue_id", required=True)
+    p.add_argument("--column", dest="column_id")
+    p.add_argument("--citation", dest="citation_id")
+    p.add_argument("--excerpt")
+    p.add_argument("--registrations")
+    p.set_defaults(func=cmd_register)
+
+    p = sub.add_parser("inspect-issue", help="pre-flight ready/needs-attention report")
+    p.add_argument("--db", required=True)
+    p.add_argument("--issue", dest="issue_id", required=True)
+    p.set_defaults(func=cmd_inspect_issue)
+
+    p = sub.add_parser("settle", help="seal an issue atomically")    p.add_argument("--db", required=True)
+    p.add_argument("--issue", dest="issue_id", required=True)
+    p.add_argument("--out")
+    p.set_defaults(func=cmd_settle)
+
+    p = sub.add_parser("voucher", help="show or verify a sealed voucher")
+    p.add_argument("--db", required=True)
+    p.add_argument("--issue", dest="issue_id", required=True)
+    p.add_argument("--verify", action="store_true")
+    p.set_defaults(func=cmd_voucher)
+
+    p = sub.add_parser("balance", help="show a payee's pending balance")
+    p.add_argument("--db", required=True)
+    p.add_argument("--payee", dest="payee_id", required=True)
+    p.set_defaults(func=cmd_balance)
+
+    p = sub.add_parser("payee-terms", help="set threshold and optional opening balance")
+    p.add_argument("--db", required=True)
+    p.add_argument("--payee", dest="payee_id", required=True)
+    p.add_argument("--threshold", dest="threshold_cents", type=int, required=True)
+    p.add_argument("--opening", dest="opening_cents", type=int)
+    p.set_defaults(func=cmd_payee_terms)
     return parser
 
 

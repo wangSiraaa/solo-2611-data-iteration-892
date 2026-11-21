@@ -1,0 +1,186 @@
+{
+  "scenario": "task 726 royalty settlement",
+  "steps": {
+    "1_same_group_once": {
+      "issue": "I1",
+      "total_cents": 6,
+      "allotted": {
+        "A": 2,
+        "B": 4
+      },
+      "payees": {
+        "A": {
+          "prior": 0,
+          "allotment": 2,
+          "threshold": 0,
+          "paid": 2,
+          "carried": 0
+        },
+        "B": {
+          "prior": 0,
+          "allotment": 4,
+          "threshold": 0,
+          "paid": 4,
+          "carried": 0
+        }
+      },
+      "sha256": "6ee251f7db9c2cc2…"
+    },
+    "2_two_groups": {
+      "issue": "I1",
+      "total_cents": 9,
+      "allotted": {
+        "A": 3,
+        "B": 6
+      },
+      "payees": {
+        "A": {
+          "prior": 0,
+          "allotment": 3,
+          "threshold": 0,
+          "paid": 3,
+          "carried": 0
+        },
+        "B": {
+          "prior": 0,
+          "allotment": 6,
+          "threshold": 0,
+          "paid": 6,
+          "carried": 0
+        }
+      },
+      "sha256": "4374e4ea8f166bf0…"
+    },
+    "3_reroute": {
+      "issue": "I1",
+      "total_cents": 6,
+      "allotted": {
+        "B": 6
+      },
+      "payees": {
+        "B": {
+          "prior": 0,
+          "allotment": 6,
+          "threshold": 0,
+          "paid": 6,
+          "carried": 0
+        }
+      },
+      "sha256": "c4a759a211316d88…"
+    },
+    "4_threshold_I1": {
+      "issue": "I1",
+      "total_cents": 6,
+      "allotted": {
+        "A": 2,
+        "B": 4
+      },
+      "payees": {
+        "A": {
+          "prior": 0,
+          "allotment": 2,
+          "threshold": 5,
+          "paid": 0,
+          "carried": 2
+        },
+        "B": {
+          "prior": 0,
+          "allotment": 4,
+          "threshold": 5,
+          "paid": 0,
+          "carried": 4
+        }
+      },
+      "sha256": "b55151d946388d99…"
+    },
+    "4_threshold_I2": {
+      "issue": "I2",
+      "total_cents": 6,
+      "allotted": {
+        "A": 2,
+        "B": 4
+      },
+      "payees": {
+        "A": {
+          "prior": 2,
+          "allotment": 2,
+          "threshold": 5,
+          "paid": 0,
+          "carried": 4
+        },
+        "B": {
+          "prior": 4,
+          "allotment": 4,
+          "threshold": 5,
+          "paid": 8,
+          "carried": 0
+        }
+      },
+      "sha256": "e05c2d87842eee3a…"
+    },
+    "5_compound_entitlement": {
+      "page": "V1/p",
+      "final_shares": {
+        "B": "1/1"
+      },
+      "channels": [
+        [
+          "A",
+          "B"
+        ],
+        [
+          "A",
+          "M",
+          "B"
+        ],
+        [
+          "B"
+        ]
+      ]
+    },
+    "5_before_insert": {
+      "issue": "I1",
+      "total_cents": 6,
+      "allotted": {
+        "B": 6
+      },
+      "payees": {
+        "B": {
+          "prior": 0,
+          "allotment": 6,
+          "threshold": 0,
+          "paid": 6,
+          "carried": 0
+        }
+      },
+      "sha256": "a191b43060181159…"
+    },
+    "5_insert_issue": {
+      "issue": "I2",
+      "total_cents": 9,
+      "allotted": {
+        "B": 9
+      },
+      "payees": {
+        "B": {
+          "prior": 0,
+          "allotment": 9,
+          "threshold": 0,
+          "paid": 9,
+          "carried": 0
+        }
+      },
+      "sha256": "929a1be8d641c7ba…"
+    },
+    "5_concurrent": {
+      "attempts": 5,
+      "errors": [],
+      "distinct_vouchers": 1
+    }
+  },
+  "vouchers_verified": {
+    "I1": true,
+    "I2": true,
+    "I3": true
+  }
+}

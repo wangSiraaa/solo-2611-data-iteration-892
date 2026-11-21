@@ -1,0 +1,234 @@
+{
+  "allocation": {
+    "allotted": {
+      "B": 9
+    },
+    "basis": {
+      "B": [
+        {
+          "amount": "3/1",
+          "group_id": "G",
+          "page_id": "p",
+          "share": "1/1",
+          "unit_cents": 3,
+          "volume_id": "V1"
+        },
+        {
+          "amount": "3/1",
+          "group_id": "G",
+          "page_id": "px",
+          "share": "1/1",
+          "unit_cents": 3,
+          "volume_id": "V1"
+        },
+        {
+          "amount": "3/1",
+          "group_id": "G",
+          "page_id": "q",
+          "share": "1/1",
+          "unit_cents": 3,
+          "volume_id": "V1"
+        }
+      ]
+    },
+    "exact": {
+      "B": "9/1"
+    },
+    "floored": {
+      "B": 9
+    },
+    "remainder_awarded": {
+      "B": 0
+    },
+    "remainder_cents": 0,
+    "remainder_order": [
+      "B"
+    ],
+    "residuals": {
+      "B": "0/1"
+    }
+  },
+  "catalog_revision": 2,
+  "entitlements": [
+    {
+      "basis": {
+        "allocation_versions": {
+          "A": {
+            "destinations": [
+              {
+                "account_id": "B",
+                "share": "1/2"
+              },
+              {
+                "account_id": "M",
+                "share": "1/2"
+              }
+            ],
+            "effective_date": "2020-02-01"
+          },
+          "M": {
+            "destinations": [
+              {
+                "account_id": "B",
+                "share": "1/1"
+              }
+            ],
+            "effective_date": "2020-02-01"
+          }
+        },
+        "page_accounts": [
+          {
+            "account_id": "A",
+            "share": "1/2"
+          },
+          {
+            "account_id": "B",
+            "share": "1/2"
+          }
+        ],
+        "page_share_version": "2020-01-01",
+        "paths": [
+          {
+            "channel": [
+              "A",
+              "B"
+            ],
+            "payee_id": "B",
+            "share": "1/4"
+          },
+          {
+            "channel": [
+              "A",
+              "M",
+              "B"
+            ],
+            "payee_id": "B",
+            "share": "1/4"
+          },
+          {
+            "channel": [
+              "B"
+            ],
+            "payee_id": "B",
+            "share": "1/2"
+          }
+        ]
+      },
+      "page_id": "p",
+      "page_share_version": "2020-01-01",
+      "publication_date": "2021-06-01",
+      "shares": {
+        "B": "1/1"
+      },
+      "volume_id": "V1"
+    },
+    {
+      "basis": {
+        "allocation_versions": {},
+        "page_accounts": [
+          {
+            "account_id": "B",
+            "share": "1/1"
+          }
+        ],
+        "page_share_version": "2020-01-01",
+        "paths": [
+          {
+            "channel": [
+              "B"
+            ],
+            "payee_id": "B",
+            "share": "1/1"
+          }
+        ]
+      },
+      "page_id": "px",
+      "page_share_version": "2020-01-01",
+      "publication_date": "2021-06-01",
+      "shares": {
+        "B": "1/1"
+      },
+      "volume_id": "V1"
+    },
+    {
+      "basis": {
+        "allocation_versions": {},
+        "page_accounts": [
+          {
+            "account_id": "B",
+            "share": "1/1"
+          }
+        ],
+        "page_share_version": "2020-01-01",
+        "paths": [
+          {
+            "channel": [
+              "B"
+            ],
+            "payee_id": "B",
+            "share": "1/1"
+          }
+        ]
+      },
+      "page_id": "q",
+      "page_share_version": "2020-01-01",
+      "publication_date": "2021-06-01",
+      "shares": {
+        "B": "1/1"
+      },
+      "volume_id": "V1"
+    }
+  ],
+  "format": "royalty-voucher/1",
+  "issue_id": "I2",
+  "payees": [
+    {
+      "allotment": 9,
+      "available": 9,
+      "carried": 0,
+      "paid": 9,
+      "payee_id": "B",
+      "prior_balance": 0,
+      "prior_lots": [],
+      "threshold": 0
+    }
+  ],
+  "publication_date": "2021-06-01",
+  "registrations": [
+    {
+      "citation_id": "C_FIXED",
+      "column_id": "K1",
+      "excerpt": "固定摘录 p",
+      "registered_catalog_revision": 2
+    },
+    {
+      "citation_id": "C_RANGE",
+      "column_id": "K2",
+      "excerpt": "连续摘录 p..q",
+      "registered_catalog_revision": 2
+    }
+  ],
+  "rights_edition_id": "E",
+  "total_cents": 9,
+  "units": [
+    {
+      "group_id": "G",
+      "page_id": "p",
+      "unit_cents": 3,
+      "volume_id": "V1"
+    },
+    {
+      "group_id": "G",
+      "page_id": "px",
+      "unit_cents": 3,
+      "volume_id": "V1"
+    },
+    {
+      "group_id": "G",
+      "page_id": "q",
+      "unit_cents": 3,
+      "volume_id": "V1"
+    }
+  ],
+  "voucher_sha256": "929a1be8d641c7ba15c35c2369d0a96eef76002fd16d93907362b026e0ae51df"
+}
